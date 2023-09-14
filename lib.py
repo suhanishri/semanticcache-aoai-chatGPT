@@ -36,7 +36,7 @@ def uploadex(q, hdata):
 
     fname = "tmp_" + str(uuid.uuid4()) + ".txt"
     with open(fname, 'w') as f:
-        f.write(q)
+        f.write(hdata)
 
     files = { 'files': open(fname,'rb') }
     headers = {
