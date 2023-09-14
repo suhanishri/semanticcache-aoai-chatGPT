@@ -311,7 +311,7 @@ def conversation_without_data(request_body):
     # hack2023 Semantic cache.
     response_obj = None
 
-    from lib import query, getmetaid, getdoc, upload, getconfidence, SEP
+    from lib import query, getmetaid, getdoc, upload, getdocex, uploadex, getconfidence, SEP
     if not SHOULD_STREAM:
         confidence_threshold = AZ_SEMANTIC_CACHE_THRESHOLD
 
@@ -327,9 +327,9 @@ def conversation_without_data(request_body):
             metaid = getmetaid(ret)
             logging.info(f"hack2023 Cache MetaId {metaid}")
 
-            ret = getdoc(metaid)
+            ret = getdocex(metaid)
             logging.info(f"hack2023 Cache Doc {ret}")
-            content = ret[0]
+            content = "Cache: " + ret[0]
 
             import uuid
             response_obj = {
@@ -377,7 +377,7 @@ def conversation_without_data(request_body):
             # hack2023 Upload to cache
             hdata = message["content"] + SEP + str(response.choices[0].message.content)
             logging.info(f"hack2023 updating the cache with content={message['content']}, hdata={hdata}")
-            upload(message["content"], hdata)
+            uploadex(message["content"], hdata)
             logging.info(f"hack2023 upload success")
 
     if not SHOULD_STREAM:

@@ -29,6 +29,30 @@ def upload(q, hdata):
     print('\t', f"upload(q={q}, hdata={hdata})", response.text)
     print()
 
+def uploadex(q, hdata):
+    url = f"http://{HAYSTACK_IP}:8000/file-upload"
+
+    payload = {'meta': json.dumps({"q":q, "intent": "cache", "id": str(uuid.uuid4()), "hdata": hdata})}
+
+    fname = "tmp_" + str(uuid.uuid4()) + ".txt"
+    with open(fname, 'w') as f:
+        f.write(q)
+
+    files = { 'files': open(fname,'rb') }
+    headers = {
+        'Accept': 'application/json'
+    }
+
+    response = requests.request("POST", url, headers=headers, data=payload, files=files)
+
+    # Delete all tmp files
+    for fname in os.listdir():
+        if fname.startswith("tmp_"):
+            os.unlink(fname)
+
+    print('\t', f"upload(q={q}, hdata={hdata})", response.text)
+    print()
+
 def getdoc(metaid):
     url = f"http://{HAYSTACK_IP}:8000/documents/get_by_filters"
     headers = {
@@ -43,6 +67,24 @@ def getdoc(metaid):
     if len(response.json()) == 0:
         return []
     content = str(response.json()[0]["content"])
+    content = content.split(SEP)[1]
+
+    return [content]
+
+def getdocex(metaid):
+    url = f"http://{HAYSTACK_IP}:8000/documents/get_by_filters"
+    headers = {
+        'Accept': 'application/json',
+        'content-type': 'application/json'
+    }
+    payload = json.dumps({"filters": { "id": metaid }})
+    response = requests.request("POST", url, headers=headers, data=payload)
+    print('\t', f"getdoc(metaid={metaid})", response, response.json())
+    print()
+
+    if len(response.json()) == 0:
+        return []
+    content = str(response.json()[0]["meta"]["hdata"])
     content = content.split(SEP)[1]
 
     return [content]
