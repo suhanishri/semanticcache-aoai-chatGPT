@@ -27,6 +27,8 @@ def favicon():
 def assets(path):
     return send_from_directory("static/assets", path)
 
+# AZ_SEMANTIC_CACHE_THRESHOLD
+AZ_SEMANTIC_CACHE_THRESHOLD = float(os.environ.get("AZ_SEMANTIC_CACHE_THRESHOLD", "0.500999"))
 
 # ACS Integration Settings
 AZURE_SEARCH_SERVICE = os.environ.get("AZURE_SEARCH_SERVICE")
@@ -304,15 +306,48 @@ def conversation_without_data(request_body):
             "content": message["content"]
         })
 
-    response = openai.ChatCompletion.create(
-        engine=AZURE_OPENAI_MODEL,
-        messages = messages,
-        temperature=float(AZURE_OPENAI_TEMPERATURE),
-        max_tokens=int(AZURE_OPENAI_MAX_TOKENS),
-        top_p=float(AZURE_OPENAI_TOP_P),
-        stop=AZURE_OPENAI_STOP_SEQUENCE.split("|") if AZURE_OPENAI_STOP_SEQUENCE else None,
-        stream=SHOULD_STREAM
-    )
+    # hack2023 Semantic cache.
+    content = ""
+
+    from lib import query, getmetaid, getdoc, upload, getconfidence, SEP
+    if not SHOULD_STREAM:
+        confidence_threshold = AZ_SEMANTIC_CACHE_THRESHOLD
+
+        ret = query(message["content"])
+        logging.info(f"hack2023 Cache Query {ret}")
+
+        confidence = getconfidence(ret)
+        logging.info(f"hack2023 Cache Confidence {confidence}")
+
+        if confidence >= confidence_threshold:
+            logging.info(f"hack2023 confidence >= confidence_threshold: {confidence} >= {confidence_threshold}")
+            response = None
+            metaid = getmetaid(ret)
+            logging.info(f"hack2023 Cache MetaId {metaid}")
+
+            ret = getdoc(metaid)
+            logging.info(f"hack2023 Cache Doc {ret}")
+            content = ret[0]
+    
+    if content == "":
+        logging.info(f"hack2023 couldn't find content in cache")
+        response = openai.ChatCompletion.create(
+            engine=AZURE_OPENAI_MODEL,
+            messages = messages,
+            temperature=float(AZURE_OPENAI_TEMPERATURE),
+            max_tokens=int(AZURE_OPENAI_MAX_TOKENS),
+            top_p=float(AZURE_OPENAI_TOP_P),
+            stop=AZURE_OPENAI_STOP_SEQUENCE.split("|") if AZURE_OPENAI_STOP_SEQUENCE else None,
+            stream=SHOULD_STREAM
+        )
+        content = response.choices[0].message.content
+
+    # hack2023 Upload response to cache
+    if not SHOULD_STREAM:
+        hdata = message["content"] + SEP + str(response.choices[0].message.content)
+        logging.info(f"hack2023 updating the cache with content={message['content']}, hdata={hdata}")
+        upload(message["content"], hdata)
+        logging.info(f"hack2023 upload success")
 
     history_metadata = request_body.get("history_metadata", {})
 
@@ -325,7 +360,7 @@ def conversation_without_data(request_body):
             "choices": [{
                 "messages": [{
                     "role": "assistant",
-                    "content": response.choices[0].message.content
+                    "content": content
                 }]
             }],
             "history_metadata": history_metadata
