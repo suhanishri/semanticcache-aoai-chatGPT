@@ -306,8 +306,10 @@ def conversation_without_data(request_body):
             "content": message["content"]
         })
 
+    history_metadata = request_body.get("history_metadata", {})
+
     # hack2023 Semantic cache.
-    content = ""
+    response_obj = None
 
     from lib import query, getmetaid, getdoc, upload, getconfidence, SEP
     if not SHOULD_STREAM:
@@ -328,8 +330,23 @@ def conversation_without_data(request_body):
             ret = getdoc(metaid)
             logging.info(f"hack2023 Cache Doc {ret}")
             content = ret[0]
+
+            import uuid
+            response_obj = {
+                "id": str(uuid.uuid4()),
+                "model": "",
+                "created": "",
+                "object": {},
+                "choices": [{
+                    "messages": [{
+                        "role": "assistant",
+                        "content": content
+                    }]
+                }],
+                "history_metadata": history_metadata
+            }
     
-    if content == "":
+    if SHOULD_STREAM or (not SHOULD_STREAM and response_obj is None):
         logging.info(f"hack2023 couldn't find content in cache")
         response = openai.ChatCompletion.create(
             engine=AZURE_OPENAI_MODEL,
@@ -340,32 +357,30 @@ def conversation_without_data(request_body):
             stop=AZURE_OPENAI_STOP_SEQUENCE.split("|") if AZURE_OPENAI_STOP_SEQUENCE else None,
             stream=SHOULD_STREAM
         )
-        content = response.choices[0].message.content
 
         # hack2023 Upload response to cache
         if not SHOULD_STREAM:
+            response_obj = {
+                "id": response,
+                "model": response.model,
+                "created": response.created,
+                "object": response.object,
+                "choices": [{
+                    "messages": [{
+                        "role": "assistant",
+                        "content": response.choices[0].message.content
+                    }]
+                }],
+                "history_metadata": history_metadata
+            }
+
+            # hack2023 Upload to cache
             hdata = message["content"] + SEP + str(response.choices[0].message.content)
             logging.info(f"hack2023 updating the cache with content={message['content']}, hdata={hdata}")
             upload(message["content"], hdata)
             logging.info(f"hack2023 upload success")
 
-    history_metadata = request_body.get("history_metadata", {})
-
     if not SHOULD_STREAM:
-        response_obj = {
-            "id": response,
-            "model": response.model,
-            "created": response.created,
-            "object": response.object,
-            "choices": [{
-                "messages": [{
-                    "role": "assistant",
-                    "content": content
-                }]
-            }],
-            "history_metadata": history_metadata
-        }
-
         return jsonify(response_obj), 200
     else:
         return Response(stream_without_data(response, history_metadata), mimetype='text/event-stream')
