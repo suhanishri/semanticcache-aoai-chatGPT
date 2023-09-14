@@ -342,12 +342,12 @@ def conversation_without_data(request_body):
         )
         content = response.choices[0].message.content
 
-    # hack2023 Upload response to cache
-    if not SHOULD_STREAM:
-        hdata = message["content"] + SEP + str(response.choices[0].message.content)
-        logging.info(f"hack2023 updating the cache with content={message['content']}, hdata={hdata}")
-        upload(message["content"], hdata)
-        logging.info(f"hack2023 upload success")
+        # hack2023 Upload response to cache
+        if not SHOULD_STREAM:
+            hdata = message["content"] + SEP + str(response.choices[0].message.content)
+            logging.info(f"hack2023 updating the cache with content={message['content']}, hdata={hdata}")
+            upload(message["content"], hdata)
+            logging.info(f"hack2023 upload success")
 
     history_metadata = request_body.get("history_metadata", {})
 
