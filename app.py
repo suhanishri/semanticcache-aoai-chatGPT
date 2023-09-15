@@ -329,7 +329,7 @@ def conversation_without_data(request_body):
 
             ret = getdocex(metaid)
             logging.info(f"hack2023 Cache Doc {ret}")
-            content = "Cache: " + ret[0]
+            content = f"Cache ({confidence} >= {confidence_threshold}): " + ret[0]
 
             import uuid
             response_obj = {
